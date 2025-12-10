@@ -39,9 +39,20 @@ echo -e "${GREEN}✓ Docker is installed${NC}"
 
 if ! command_exists poetry; then
     echo -e "${RED}✗ Poetry is not installed${NC}"
-    echo "  Installing Poetry..."
-    curl -sSL https://install.python-poetry.org | python3 -
-    export PATH="$HOME/.local/bin:$PATH"
+    echo ""
+    echo -e "${YELLOW}Please install Poetry manually:${NC}"
+    echo ""
+    echo "  Option 1 - Using Homebrew (recommended for macOS):"
+    echo "    brew install poetry"
+    echo ""
+    echo "  Option 2 - Using pip:"
+    echo "    pip3 install poetry"
+    echo ""
+    echo "  Option 3 - Official installer (if you have Python 3.10+):"
+    echo "    curl -sSL https://install.python-poetry.org | python3 -"
+    echo ""
+    echo "After installing, run this script again."
+    exit 1
 fi
 echo -e "${GREEN}✓ Poetry is installed${NC}"
 
