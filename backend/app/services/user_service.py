@@ -176,3 +176,17 @@ async def get_broadcast_recipients(
     result = await db.execute(query)
     return result.scalars().all()
 
+
+async def get_all_users(db: AsyncSession) -> List[User]:
+    """
+    Get all users from database.
+
+    Args:
+        db: Database session
+
+    Returns:
+        List of all users
+    """
+    query = select(User).order_by(User.id)
+    result = await db.execute(query)
+    return result.scalars().all()

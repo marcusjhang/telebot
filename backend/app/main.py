@@ -23,6 +23,14 @@ except Exception as e:
     bot = None
     BOT_AVAILABLE = False
 
+# Import scheduler
+try:
+    from app.scheduler import start_scheduler, shutdown_scheduler
+    SCHEDULER_AVAILABLE = True
+except Exception as e:
+    logging.error(f"Failed to import scheduler: {e}")
+    SCHEDULER_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
@@ -158,7 +166,13 @@ async def startup():
         # Note: Don't start polling here as it blocks the event loop
         # Run polling in a separate process: python -m app.bot.polling
 
-    # TODO: Start scheduler for daily/weekly recaps
+    # Start scheduler for daily/weekly recaps
+    if SCHEDULER_AVAILABLE:
+        try:
+            start_scheduler()
+            logger.info("Scheduler started for daily/weekly jobs")
+        except Exception as e:
+            logger.error(f"Failed to start scheduler: {e}", exc_info=True)
 
 
 @app.on_event("shutdown")
@@ -166,6 +180,15 @@ async def shutdown():
     """
     Cleanup on shutdown.
     """
+    # Shutdown scheduler
+    if SCHEDULER_AVAILABLE:
+        try:
+            shutdown_scheduler()
+            logger.info("Scheduler shut down")
+        except Exception as e:
+            logger.error(f"Failed to shutdown scheduler: {e}", exc_info=True)
+
+    # Dispose database engine
     await engine.dispose()
     logger.info("Application shutdown complete")
 
