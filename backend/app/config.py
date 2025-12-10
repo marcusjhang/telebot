@@ -3,7 +3,8 @@ Application configuration using Pydantic Settings.
 All users are hardcoded to Asia/Singapore timezone.
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from pydantic import model_validator
+from typing import List, Any
 import json
 
 
@@ -33,12 +34,20 @@ class Settings(BaseSettings):
     
     # JWT
     JWT_SECRET_KEY: str
+    API_SECRET_KEY: str = ""  # Alias for JWT_SECRET_KEY (set in validator)
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
-    
+    JWT_EXPIRE_MINUTES: int = 10080  # Alias for compatibility
+
     # API
     API_V1_PREFIX: str = "/api/v1"
     BACKEND_CORS_ORIGINS: str = '["http://localhost:3000"]'
+
+    # Telegram Webhook
+    TELEGRAM_WEBHOOK_URL: str = ""
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
     
     # Web App
     WEB_APP_URL: str = "http://localhost:3000"
@@ -59,7 +68,18 @@ class Settings(BaseSettings):
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
-    
+
+    @model_validator(mode='after')
+    def set_defaults(self) -> 'Settings':
+        """Set default values for aliased fields"""
+        # Set API_SECRET_KEY from JWT_SECRET_KEY if not provided
+        if not self.API_SECRET_KEY:
+            self.API_SECRET_KEY = self.JWT_SECRET_KEY
+        # Set JWT_EXPIRE_MINUTES from JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        if self.JWT_EXPIRE_MINUTES != self.JWT_ACCESS_TOKEN_EXPIRE_MINUTES:
+            self.JWT_EXPIRE_MINUTES = self.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        return self
+
     @property
     def cors_origins(self) -> List[str]:
         """Parse CORS origins from JSON string"""
@@ -67,7 +87,7 @@ class Settings(BaseSettings):
             return json.loads(self.BACKEND_CORS_ORIGINS)
         except:
             return ["http://localhost:3000"]
-    
+
     @property
     def is_production(self) -> bool:
         """Check if running in production"""
