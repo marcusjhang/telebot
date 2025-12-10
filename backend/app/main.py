@@ -3,6 +3,7 @@ Main FastAPI application with bot webhook integration.
 """
 import os
 import logging
+import telebot
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -12,6 +13,15 @@ from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.database import engine
 from app.api import auth, users, goals, logs, progress
+
+# Import bot (this will initialize handlers)
+try:
+    from app.bot.handlers import bot
+    BOT_AVAILABLE = True
+except Exception as e:
+    logging.error(f"Failed to import bot: {e}")
+    bot = None
+    BOT_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(
@@ -91,6 +101,36 @@ async def root():
     }
 
 
+@app.post("/webhook")
+async def webhook_handler(request: Request):
+    """
+    Telegram webhook endpoint.
+    Receives updates from Telegram and processes them with the bot.
+    """
+    if not BOT_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Bot not available")
+
+    try:
+        # Verify webhook secret if configured
+        if settings.TELEGRAM_WEBHOOK_SECRET:
+            secret_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+            if secret_token != settings.TELEGRAM_WEBHOOK_SECRET:
+                raise HTTPException(status_code=403, detail="Invalid secret token")
+
+        # Get update from request
+        update_dict = await request.json()
+        update = telebot.types.Update.de_json(update_dict)
+
+        # Process update
+        bot.process_new_updates([update])
+
+        return {"ok": True}
+
+    except Exception as e:
+        logger.error(f"Error processing webhook: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.on_event("startup")
 async def startup():
     """
@@ -98,8 +138,26 @@ async def startup():
     """
     logger.info(f"Starting application in {settings.ENVIRONMENT} mode")
     logger.info(f"Database URL: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'local'}")
-    
-    # TODO: Initialize bot and set webhook in production
+
+    # Initialize bot webhook in production
+    if BOT_AVAILABLE and settings.ENVIRONMENT == "production" and settings.TELEGRAM_WEBHOOK_URL:
+        try:
+            webhook_url = f"{settings.TELEGRAM_WEBHOOK_URL}/webhook"
+            bot.remove_webhook()
+            bot.set_webhook(
+                url=webhook_url,
+                secret_token=settings.TELEGRAM_WEBHOOK_SECRET if settings.TELEGRAM_WEBHOOK_SECRET else None
+            )
+            logger.info(f"Webhook set to {webhook_url}")
+        except Exception as e:
+            logger.error(f"Failed to set webhook: {e}", exc_info=True)
+
+    # Start polling in development
+    elif BOT_AVAILABLE and settings.ENVIRONMENT == "development":
+        logger.info("Development mode: Use polling manually or via separate process")
+        # Note: Don't start polling here as it blocks the event loop
+        # Run polling in a separate process: python -m app.bot.polling
+
     # TODO: Start scheduler for daily/weekly recaps
 
 
